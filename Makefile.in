@@ -1,0 +1,26 @@
+CC=@CC@
+CFLAGS=-g @INCLUDES@ -Wall 
+LD=@LDFLAGS@ -lssl -lcrypto
+DISTDIR=nexbridge-0.1
+DISTFILE=${DISTDIR}.tar.gz
+BIN_DIR=/usr/bin/
+
+all:  nexbridge
+
+svcdd: nexbridge.o 
+	$(CC) nexbridge.o -o nexbridge $(LD)
+
+fedora: nexbridge.o
+	$(CC) nexbridge.o -o nexbridge $(LD)
+
+clean:	
+	rm *.o nexbridge *~
+
+install: nexbridge
+	install -s nexbridge $(BIN_DIR)
+
+install_fedora: nexbridge
+	install -s nexbridge $(BIN_DIR)
+
+uninstall:
+	rm -f $(BIN_DIR)/nexbridge
