@@ -1,17 +1,14 @@
 CC=@CC@
-CFLAGS=-g @INCLUDES@ -Wall 
-LD=@LDFLAGS@ -lssl -lcrypto
+CFLAGS=-g @INCLUDES@ -Wall -std=gnu99
+LD=@LDFLAGS@ -lavahi-client -lavahi-common -lpthread
 DISTDIR=nexbridge-0.1
 DISTFILE=${DISTDIR}.tar.gz
 BIN_DIR=/usr/bin/
 
 all:  nexbridge
 
-svcdd: nexbridge.o 
-	$(CC) nexbridge.o -o nexbridge $(LD)
-
-fedora: nexbridge.o
-	$(CC) nexbridge.o -o nexbridge $(LD)
+nexbridge: nexbridge.o mdns_avahi.o
+	$(CC) $(CFLAGS) nexbridge.o mdns_avahi.o -o nexbridge $(LD)
 
 clean:	
 	rm *.o nexbridge *~

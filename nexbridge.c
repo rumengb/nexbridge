@@ -3,7 +3,6 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <signal.h>
-#include <syslog.h>
 #include <unistd.h>
 #include <ctype.h>
 #include <string.h>
@@ -12,6 +11,9 @@
 #include <errno.h>
 #include <termios.h>
 #include <fcntl.h>
+
+#include "nexbridge.h"
+#include "mdns_avahi.h"
 
 #define VERSION "0.1-rc1"
 
@@ -23,42 +25,10 @@
 
 volatile int conn_count=0;
 
-typedef struct {
-	int is_daemon;
-	int server_port;
-	char tty_port[255];
-	char address[255];
-	int timeout;
-	int max_conn;
-} config;
-
 config conf;
 
 #define ATOMIC_INC(i) ((void)__sync_add_and_fetch(i,1))
 #define ATOMIC_DEC(i) ((void)__sync_sub_and_fetch(i,1))
-
-#define LOG(msg, ...) \
-	{ if(conf.is_daemon) { \
-		openlog("svcdd",LOG_PID,LOG_DAEMON);\
-		syslog(LOG_INFO,msg, ## __VA_ARGS__);\
-		closelog();\
-	} else { \
-		fprintf(stderr,"LOG: ");\
-		fprintf(stderr, msg,  ## __VA_ARGS__);\
-		fprintf(stderr,"\n");\
-	}}\
-
-
-#define LOG_DBG(msg, ...) \
-	{ if(conf.is_daemon) { \
-		openlog("svcdd",LOG_PID,LOG_DAEMON); \
-		syslog(LOG_DEBUG,msg, ## __VA_ARGS__); \
-		closelog(); \
-	} else { \
-		fprintf(stderr,"DBG: ");\
-		fprintf(stderr, msg,  ## __VA_ARGS__);\
-		fprintf(stderr,"\n");\
-	}}\
 
 // get sockaddr, IPv4 or IPv6:
 void *get_in_addr(struct sockaddr *sa) {
@@ -85,6 +55,7 @@ void sig_handler(int sig) {
 		pgrp = getpgrp();
 		if (pgrp==getpid()) {
 			LOG("Daemon dieing with signal=%d", sig);
+			mdns_stop();
 			killpg(pgrp,SIGINT);
 			exit(0);
 		} else {
@@ -276,6 +247,7 @@ void print_usage(char *name) {
 	printf( " Copyright (c)2014 by Rumen Bogdanovski\n\n");
 }
 
+
 int main(int argc, char **argv) {
 	int sock,s;
 	int c;
@@ -373,8 +345,10 @@ int main(int argc, char **argv) {
 		exit(1);
 	}
 
-
 	sock=tcp_listen(addr,htons(conf.server_port));
+
+	mdns_init();
+	mdns_start();
 
 	LOG("Version %s started on %s:%d",VERSION, conf.address, conf.server_port);
 
