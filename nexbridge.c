@@ -15,7 +15,7 @@
 #include "nexbridge.h"
 #include "mdns_avahi.h"
 
-#define VERSION "0.1-rc1"
+#define VERSION "0.1-rc2"
 
 #define PORT	9999
 #define SESS_TIMEOUT 0
@@ -55,7 +55,7 @@ void sig_handler(int sig) {
 		pgrp = getpgrp();
 		if (pgrp==getpid()) {
 			LOG("Daemon dieing with signal=%d", sig);
-			mdns_stop();
+			if (conf.svc_name[0]) mdns_stop();
 			killpg(pgrp,SIGINT);
 			exit(0);
 		} else {
@@ -81,7 +81,8 @@ void session_timeout(int sig) {
 void config_defaults() {
 	conf.is_daemon = 1;
 	conf.server_port = PORT;
-	strcpy(conf.address, "");
+	conf.address[0] = '\0';
+	conf.svc_name[0] = '\0';
 	strcpy(conf.tty_port, TTY_PORT);
 	conf.timeout = SESS_TIMEOUT;
 	conf.max_conn=1;
@@ -239,6 +240,7 @@ void print_usage(char *name) {
 		"    -m  maximum simultaneous connections [default: 1]\n"
 		"        Allowing More than one connection is not advisable!\n"
 		"    -p  TCP port to bind to [default: %d]\n"
+		"    -s  Bonjour name, if not specified no service will published."
 		"    -P  Serial port to connect to telescope [default: %s]\n"
 		"    -t  session timeout in seconds [default: %d]\n"
 		"    -v  print version\n"
@@ -260,7 +262,7 @@ int main(int argc, char **argv) {
 
 	config_defaults();
 	setlogmask(LOG_UPTO (LOG_INFO));
-	while((c=getopt(argc,argv,"dhnva:m:p:P:t:"))!=-1){
+	while((c=getopt(argc,argv,"dhnva:m:p:P:s:t:"))!=-1){
 		switch(c){
 		case 'a':
 			snprintf(conf.address,255,"%s", optarg);
@@ -273,6 +275,10 @@ int main(int argc, char **argv) {
 		case 'P':
 			snprintf(conf.tty_port,255,"%s", optarg);
 			LOG_DBG("tty_port = %s", conf.tty_port);
+			break;
+		case 's':
+			snprintf(conf.svc_name,255,"%s", optarg);
+			LOG_DBG("svc_name = %s", conf.svc_name);
 			break;
 		case 't':
 			conf.timeout = atoi(optarg);
@@ -347,8 +353,10 @@ int main(int argc, char **argv) {
 
 	sock=tcp_listen(addr,htons(conf.server_port));
 
-	mdns_init();
-	mdns_start();
+	if (conf.svc_name[0]) {
+		mdns_init(conf.svc_name, "_nexbridge._tcp", conf.tty_port, conf.server_port);
+		mdns_start();
+	}
 
 	LOG("Version %s started on %s:%d",VERSION, conf.address, conf.server_port);
 

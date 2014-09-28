@@ -9,6 +9,7 @@ typedef struct {
 	int server_port;
 	char tty_port[255];
 	char address[255];
+	char svc_name[255];
 	int timeout;
 	int max_conn;
 } config;
