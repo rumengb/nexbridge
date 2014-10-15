@@ -14,12 +14,7 @@
 
 #include "nexbridge.h"
 #include "mdns_avahi.h"
-
-#define VERSION "0.1-rc2"
-
-#define PORT	9999
-#define SESS_TIMEOUT 0
-#define TTY_PORT "/dev/ttyUSB0"
+#include "config.h"
 
 #define BUFSIZZ 1024
 
@@ -85,7 +80,7 @@ void config_defaults() {
 	conf.svc_name[0] = '\0';
 	strcpy(conf.tty_port, TTY_PORT);
 	conf.timeout = SESS_TIMEOUT;
-	conf.max_conn=1;
+	conf.max_conn = MAXCON;
 }
 
 int open_telescope(char *dev_file) {
@@ -240,7 +235,9 @@ void print_usage(char *name) {
 		"    -m  maximum simultaneous connections [default: 1]\n"
 		"        Allowing More than one connection is not advisable!\n"
 		"    -p  TCP port to bind to [default: %d]\n"
+		#ifdef HAVE_MDNS
 		"    -s  Bonjour name, if not specified no service will published.\n"
+		#endif
 		"    -P  Serial port to connect to telescope [default: %s]\n"
 		"    -t  session timeout in seconds [default: %d]\n"
 		"    -v  print version\n"

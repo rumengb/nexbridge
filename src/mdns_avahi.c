@@ -5,6 +5,9 @@
 #include <string.h>
 
 #include <pthread.h> 
+#include "mdns_avahi.h"
+
+#ifdef HAVE_LIBAVAHI
 
 #include <avahi-client/client.h>
 #include <avahi-client/publish.h>
@@ -193,3 +196,19 @@ int mdns_stop() {
 	rc = pthread_join(tid, NULL);
 	return rc;
 }
+
+#else /* HAVE_LIBAVAHI */
+
+int mdns_init(char *name, char *type, char *text, int port) {
+        return 0;
+}
+
+int mdns_start() {
+	return 0;
+}
+
+int mdns_stop() {
+        return 0;
+}
+
+#endif /* HAVE_LIBAVAHI */
