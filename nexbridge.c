@@ -240,7 +240,7 @@ void print_usage(char *name) {
 		"    -m  maximum simultaneous connections [default: 1]\n"
 		"        Allowing More than one connection is not advisable!\n"
 		"    -p  TCP port to bind to [default: %d]\n"
-		"    -s  Bonjour name, if not specified no service will published."
+		"    -s  Bonjour name, if not specified no service will published.\n"
 		"    -P  Serial port to connect to telescope [default: %s]\n"
 		"    -t  session timeout in seconds [default: %d]\n"
 		"    -v  print version\n"
