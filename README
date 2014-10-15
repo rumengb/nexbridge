@@ -1,0 +1,27 @@
+nexbridge
+==========
+
+This this program transparently proxies the serial commands supported
+by the Celestron NexStar hand control over the network, so that the
+telescope can be controlled over the network. It is recommended to be
+used with libnexstar or NexStarCtl on the remote end.
+
+This includes NexStar GPS, NexStar GPS-SA, NexStar iSeries, NexStar SE
+Series, NexStar GT, CPC, SLT, Advanced-VX, Advanced-GT, and CGE mounts.
+
+Communication to the hand control is 9600 bits/sec, no parity and one
+stop bit via the RS-232 port on the base of the hand control.
+
+It can publish the service using mDNS as XXX._nexbridge._tcp.local.
+where XXX is user specified name with "-s" option.
+
+COPYRIGHT AND LICENSE
+
+Copyright (C) 2013-2014 by Rumen G.Bogdanovski
+
+This is a free software, you can redistribute it and/or modify
+it under the terms of GPL3
+
+The author assumes no liability or responsibility for damage or injury
+to persons or property arising from any use of this product. Use it at
+your own risk.
