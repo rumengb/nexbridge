@@ -10,6 +10,7 @@ typedef struct {
 	char tty_port[255];
 	char address[255];
 	char svc_name[255];
+	char svc_type[255];
 	int timeout;
 	int max_conn;
 } config;
@@ -18,7 +19,7 @@ extern config conf;
 
 #define LOG(msg, ...) \
 	{ if(conf.is_daemon) { \
-		openlog("svcdd",LOG_PID,LOG_DAEMON);\
+		openlog("nexbridge",LOG_PID,LOG_DAEMON);\
 		syslog(LOG_INFO,msg, ## __VA_ARGS__);\
 		closelog();\
 	} else { \
@@ -30,7 +31,7 @@ extern config conf;
 
 #define LOG_DBG(msg, ...) \
 	{ if(conf.is_daemon) { \
-		openlog("svcdd",LOG_PID,LOG_DAEMON); \
+		openlog("nexbridge",LOG_PID,LOG_DAEMON); \
 		syslog(LOG_DEBUG,msg, ## __VA_ARGS__); \
 		closelog(); \
 	} else { \

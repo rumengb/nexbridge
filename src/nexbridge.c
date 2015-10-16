@@ -78,6 +78,7 @@ void config_defaults() {
 	conf.server_port = PORT;
 	conf.address[0] = '\0';
 	conf.svc_name[0] = '\0';
+	sprintf(conf.svc_type, "%s.%s", SVC_TYPE, SVC_PROTO);
 	strcpy(conf.tty_port, TTY_PORT);
 	conf.timeout = SESS_TIMEOUT;
 	conf.max_conn = MAXCON;
@@ -236,14 +237,15 @@ void print_usage(char *name) {
 		"        Allowing More than one connection is not advisable!\n"
 		"    -p  TCP port to bind to [default: %d]\n"
 		#ifdef HAVE_MDNS
-		"    -s  Bonjour name, if not specified no service will published.\n"
+		"    -s  Bonjour service name, if not specified no service will published\n"
+		"    -T  Bonjour service type [default: '_nexbridge'}\n"
 		#endif
 		"    -P  Serial port to connect to telescope [default: %s]\n"
 		"    -t  session timeout in seconds [default: %d]\n"
 		"    -v  print version\n"
 		"    -h  print this help message\n\n",
 		name, PORT, TTY_PORT, SESS_TIMEOUT);
-	printf( " Copyright (c)2014 by Rumen Bogdanovski\n\n");
+	printf( " Copyright (c)2014-2015 by Rumen Bogdanovski\n\n");
 }
 
 
@@ -259,7 +261,7 @@ int main(int argc, char **argv) {
 
 	config_defaults();
 	setlogmask(LOG_UPTO (LOG_INFO));
-	while((c=getopt(argc,argv,"dhnva:m:p:P:s:t:"))!=-1){
+	while((c=getopt(argc,argv,"dhnva:m:p:P:s:T:t:"))!=-1){
 		switch(c){
 		case 'a':
 			snprintf(conf.address,255,"%s", optarg);
@@ -276,6 +278,13 @@ int main(int argc, char **argv) {
 		case 's':
 			snprintf(conf.svc_name,255,"%s", optarg);
 			LOG_DBG("svc_name = %s", conf.svc_name);
+			break;
+		case 'T':
+			if (optarg[0] == '_')  // service type should start with '_' if not given add it
+				snprintf(conf.svc_type,255,"%s.%s", optarg,SVC_PROTO);
+			else
+				snprintf(conf.svc_type,255,"_%s.%s", optarg,SVC_PROTO);
+			LOG_DBG("svc_type = %s", conf.svc_type);
 			break;
 		case 't':
 			conf.timeout = atoi(optarg);
@@ -351,7 +360,7 @@ int main(int argc, char **argv) {
 	sock=tcp_listen(addr,htons(conf.server_port));
 
 	if (conf.svc_name[0]) {
-		mdns_init(conf.svc_name, "_nexbridge._tcp", conf.tty_port, conf.server_port);
+		mdns_init(conf.svc_name, conf.svc_type, conf.tty_port, conf.server_port);
 		mdns_start();
 	}
 

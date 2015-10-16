@@ -30,9 +30,29 @@ static char svc_text[255];
 static char svc_type[255];
 static int svc_port;
 
+pthread_mutex_t sleep_mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t sleep_cond = PTHREAD_COND_INITIALIZER;
+
 static pthread_t tid;
 
 static void create_services(AvahiClient *c);
+
+int thread_sleep(int seconds) {
+	struct timespec ttw;
+	struct timeval now;
+	int res;
+
+	gettimeofday(&now,NULL);
+
+	ttw.tv_sec = now.tv_sec + seconds;
+	ttw.tv_nsec = now.tv_usec*1000;
+
+	pthread_mutex_lock(&sleep_mutex);
+	res = pthread_cond_timedwait(&sleep_cond, &sleep_mutex, &ttw);
+	pthread_mutex_unlock(&sleep_mutex);
+	return res;
+}
+
 
 static void entry_group_callback(AvahiEntryGroup *g, AvahiEntryGroupState state, AVAHI_GCC_UNUSED void *userdata) {
 	assert(g == group || group == NULL);
@@ -42,7 +62,7 @@ static void entry_group_callback(AvahiEntryGroup *g, AvahiEntryGroupState state,
 	switch (state) {
 		case AVAHI_ENTRY_GROUP_ESTABLISHED :
 			/* The entry group has been established successfully */
-			LOG_DBG("avahi cleint: Service '%s' successfully established.", name);
+			LOG_DBG("avahi cleint: Service '%s' of type %s successfully established.", name, svc_type);
 			break;
 
 		case AVAHI_ENTRY_GROUP_COLLISION : {
@@ -85,7 +105,7 @@ static void create_services(AvahiClient *c) {
 		}
 
 	if (avahi_entry_group_is_empty(group)) {
-		LOG_DBG("avahi cleint: Adding service '%s'", name);
+		LOG_DBG("avahi cleint: Adding service '%s' of type '%s'", name, svc_type);
 
 		if ((ret = avahi_entry_group_add_service(group, AVAHI_IF_UNSPEC, AVAHI_PROTO_UNSPEC, 0, name, svc_type, NULL, NULL, svc_port, svc_text, NULL)) < 0) {
 			if (ret == AVAHI_ERR_COLLISION) goto collision;
@@ -142,6 +162,7 @@ static void client_callback(AvahiClient *c, AvahiClientState state, AVAHI_GCC_UN
 void *avahi_thread(void *data) {
 	int error;
 	int ret = 1;
+	int retrys = 4;
 
 	/* Allocate main loop object */
 	if (!(simple_poll = avahi_simple_poll_new())) {
@@ -152,12 +173,21 @@ void *avahi_thread(void *data) {
 	name = avahi_strdup(svc_name);
 
 	/* Allocate a new client */
+retry:
 	client = avahi_client_new(avahi_simple_poll_get(simple_poll), 0, client_callback, NULL, &error);
 
 	/* Check wether creating the client object succeeded */
 	if (!client) {
 		LOG( "avahi client: Failed to create client: %s", avahi_strerror(error));
-		goto fail;
+		if (retrys > 0) {
+			LOG("Retrying %d more times.", retrys);
+			thread_sleep(5);
+			retrys--;
+			goto retry;
+		} else {
+			LOG("Giving up...");
+			goto fail;
+		}
 	}
 
 	/* Run the main loop */
@@ -176,18 +206,18 @@ fail:
 
 int mdns_init(char *name, char *type, char *text, int port) {
 	strncpy(svc_name, name, 255);
-	strncpy(svc_type,type,255);
-	if (text!=NULL) strncpy(svc_text,text,255);
-	else svc_text[0]='\0';
+	strncpy(svc_type, type, 255);
+	if (text != NULL) strncpy(svc_text, text, 255);
+	else svc_text[0] = '\0';
 	svc_port = port;
 	return 0;
 }
 
 int mdns_start() {
-    int rc = pthread_create(&tid, NULL, avahi_thread, NULL);
-    if (rc) return rc;
-    rc = pthread_detach(tid);
-    return rc;
+	int rc = pthread_create(&tid, NULL, avahi_thread, NULL);
+	if (rc) return rc;
+	rc = pthread_detach(tid);
+	return rc;
 }
 
 int mdns_stop() {
