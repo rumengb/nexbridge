@@ -37,26 +37,26 @@ config conf;
 
 int open_pts(char *pts_name, int pts_name_size) {
 	char *pname;
-	int fdm;
+	int fd;
 
-	fdm = posix_openpt(O_RDWR | O_NOCTTY);
-	if (fdm < 0)
+	fd = posix_openpt(O_RDWR | O_NOCTTY);
+	if (fd < 0)
 		return -1;
-	if (grantpt(fdm) < 0) {
-		close(fdm);
-		return -1;
-	}
-	if (unlockpt(fdm) < 0) {
-		close(fdm);
+	if (grantpt(fd) < 0) {
+		close(fd);
 		return -1;
 	}
-	if ((pname = ptsname(fdm)) == NULL) {
-		close(fdm);
+	if (unlockpt(fd) < 0) {
+		close(fd);
+		return -1;
+	}
+	if ((pname = ptsname(fd)) == NULL) {
+		close(fd);
 		return -1;
 	}
 
 	strncpy(pts_name, pname, pts_name_size);
-	return (fdm);
+	return fd;
 }
 
 
@@ -115,7 +115,7 @@ int data_pump(int net_fd, int pty_fd) {
 			}
 			r = write(pty_fd,buf,r);
 			if (r <= 0) {
-				if ((r < 0) && (errno != EAGAIN)) { // ignore the error if the buffer is full
+				if ((r < 0) && (errno != EAGAIN)) { /* ignore the error if the buffer is full */
 					printf("write(pty_fd): %s\n",strerror(errno));
 				}
 				continue;
@@ -125,8 +125,7 @@ int data_pump(int net_fd, int pty_fd) {
 		if(FD_ISSET(pty_fd,&readset)) {
 			r = read(pty_fd,buf,BUFSIZZ-1);
 			if (r <= 0) {
-				//if(r<0) printf("read(pty_fd): %s\n",strerror(errno));
-				usleep(50000); // offload the cpu as once the client closes tty -> FD_ISSET. Wired?!
+				usleep(50000); /* offload the cpu as once the client closes tty -> FD_ISSET. Wired?! */
 				continue;
 			}
 			r = write(net_fd,buf,r);
@@ -165,7 +164,7 @@ int data_pump(int net_fd, int pty_fd) {
 			}
 			r = write(pty_fd,buf,r);
 			if (r <= 0) {
-				if ((r < 0) && (errno != EAGAIN)) { // ignore the error if the buffer is full
+				if ((r < 0) && (errno != EAGAIN)) { /* ignore the error if the buffer is full */
 					printf("write(pty_fd): %s\n",strerror(errno));
 				}
 				continue;
@@ -279,7 +278,7 @@ int main(int argc, char **argv) {
 		exit(1);
 	}
 
-	sa.sa_handler = sig_handler; // reap all dead processes
+	sa.sa_handler = sig_handler;
 	sigemptyset(&sa.sa_mask);
 	sa.sa_flags = 0;
 	if (sigaction(SIGCHLD, &sa, NULL) == -1) {
@@ -313,7 +312,7 @@ int main(int argc, char **argv) {
 		exit(1);
 	}
 
-	do {	// recreate the pty if the file is closed by the app otherwise select() always returns
+	do { /* recreate the pty if the file is closed by the app otherwise select() always returns */
 		tty_fd = open_pts(tty_name, 1024);
 		if (tty_fd == -1) {
 			close(tcp_fd);
@@ -322,12 +321,18 @@ int main(int argc, char **argv) {
 		}
 		printf("Connection: [%s] <=> [%s:%d]\n", tty_name, conf.address, conf.tcp_port);
 		if(conf.tty_name[0] != '\0') {
-			res=symlink(tty_name,conf.tty_name);
+			res = symlink(tty_name,conf.tty_name);
 			if (res < 0) {
 				printf("Can not create a symbolic link: %s\n",strerror(errno));
 				conf.tty_name[0]='\n';
 			} else {
 				printf("Use: '%s' to connect.\n", conf.tty_name);
+			}
+			if(geteuid() == 0) { /* if root allow everyone to use it (crw-rw-rw-) */
+				res = chmod(conf.tty_name,0666);
+				if (res < 0) {
+					printf("Could not change mode: %s\n",strerror(errno));
+				}
 			}
 		}
 		res = data_pump(tcp_fd, tty_fd);
