@@ -1,8 +1,8 @@
 /**************************************************************
-        ttynet - connect a virtual tty port to a network 
-	exported tty device
+    ttynet - connect a virtual tty port to a network
+    exported tty device
 
-        (C)2013-2015 by Rumen G.Bogdanovski
+    (C)2013-2015 by Rumen G.Bogdanovski
 ***************************************************************/
 #define _XOPEN_SOURCE
 
@@ -19,6 +19,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <sys/select.h>
+#include "config.h"
 
 typedef struct {
 	int port;
@@ -28,7 +29,7 @@ typedef struct {
 
 config conf;
 
-#define VERSION "0.1-a1"
+//#define VERSION "0.1-a1"
 
 #define h_addr h_addr_list[0] /* for backward compatibility */
 
@@ -63,7 +64,7 @@ int open_tcp(char *host, int port) {
 	struct sockaddr_in srv_info;
 	struct hostent *he;
 	int sock;
-	struct timeval timeout;      
+	struct timeval timeout;
 
 	timeout.tv_sec = 5;
 	timeout.tv_usec = 0;
@@ -83,7 +84,7 @@ int open_tcp(char *host, int port) {
 	if (connect(sock, (struct sockaddr *)&srv_info, sizeof(struct sockaddr))<0) {
 		return -1;
 	}
-	
+
 	return sock;
 }
 
@@ -112,7 +113,7 @@ int data_pump(int net_fd, int pty_fd) {
 			}
 			r = write(pty_fd,buf,r);
 			if (r <= 0) {
-				if ((r < 0) && (errno != EAGAIN)) { // ignore the error it the buffer is full
+				if ((r < 0) && (errno != EAGAIN)) { // ignore the error if the buffer is full
 					printf("write(pty_fd): %s\n",strerror(errno));
 				}
 				continue;
@@ -123,7 +124,7 @@ int data_pump(int net_fd, int pty_fd) {
 			r = read(pty_fd,buf,BUFSIZZ-1);
 			if (r <= 0) {
 				//if(r<0) printf("read(pty_fd): %s\n",strerror(errno));
-				usleep(50000); //offload the cpu when once the client closes tty -> FD_ISSET wired?! 
+				usleep(50000); // offload the cpu as once the client closes tty -> FD_ISSET. Wired?!
 				continue;
 			}
 			r = write(net_fd,buf,r);
@@ -187,7 +188,7 @@ int data_pump1(int net_fd, int pty_fd) {
 */
 
 void print_usage(char *name) {
-	printf( "tty2net %s\n", VERSION);
+	printf( "%s %s\n", name, VERSION);
 	printf( "usage: %s [-v] -a address -p port [-t timeout]\n"
 		"    -a  IP address to connect to\n"
 		"    -p  TCP port to connect to\n"
@@ -208,7 +209,7 @@ int main(int argc, char **argv) {
 	int res, c;
 	int tcp_fd;
 	int tty_fd;
-	
+
 	while((c=getopt(argc,argv,"hva:p:t:"))!=-1){
 		switch(c){
 		case 'a':
@@ -233,7 +234,7 @@ int main(int argc, char **argv) {
 			exit(1);
 		}
 	}
-	
+
 	if ((conf.address == '\0') || (conf.port == 0)) {
 		printf("Please specify address and port, for help: %s -h\n", argv[0]);
 		exit(1);
@@ -252,7 +253,7 @@ int main(int argc, char **argv) {
 			printf("Can not allocate virtual tty.\n");
 			exit(1);
 		}
-		printf("(%s) <=> (%s:%d)\n", tty_name, conf.address, conf.port);
+		printf("Created link: [%s] <=> [%s:%d]\n", tty_name, conf.address, conf.port);
 		res = data_pump(tcp_fd, tty_fd);
 		close(tty_fd);
 	} while (res == -2);
