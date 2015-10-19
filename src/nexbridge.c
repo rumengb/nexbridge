@@ -234,6 +234,12 @@ void daemonize() {
 
 void print_usage(char *name) {
 	printf( "Nexstar TCP to Serial Daemon version %s\n", VERSION);
+	printf( "This software is intended to be used with libnexstar and NexStarCtl\n"
+		"but it proved to be very useful for exporting all kinds of telescope\n"
+		"mounts on the network like Sky-Watcher, Meade etc. Nexbridge can be\n"
+		"used directly with software like SkySafari or through ttynet or other\n"
+		"serial port emulator with software like Stellarium, to control the\n"
+		"network exported telescopes. (see ttynet)\n\n" );
 	printf( "usage: %s [-dn] [-a address] [-p port] [-m conns] [-P ttydev] [-t timeout]\n"
 		"    -d  log debug information\n"
 		"    -n  do not daemonize, log to stderr\n"
@@ -309,7 +315,7 @@ int main(int argc, char **argv) {
 			print_usage(argv[0]);
 			exit(1);
 		case 'v':
-			printf("nexbridge version %s\n", VERSION);
+			printf("%s version %s\n", argv[0], VERSION);
 			exit(1);
 		case '?':
 		default:

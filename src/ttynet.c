@@ -22,15 +22,15 @@
 #include <sys/select.h>
 #include "config.h"
 
+#define NAME_SIZZ 1024
 #define BUFSIZZ 1024
 #define h_addr h_addr_list[0] /* for backward compatibility */
 #define unlink_tty(tty_name) if ((tty_name[0]) != '\0') unlink(tty_name)
 
 typedef struct {
 	int tcp_port;
-	char address[255];
-	char tty_name[255];
-	int timeout;
+	char address[NAME_SIZZ];
+	char tty_name[NAME_SIZZ];
 } config;
 config conf;
 
@@ -64,10 +64,6 @@ int open_tcp(char *host, int port) {
 	struct sockaddr_in srv_info;
 	struct hostent *he;
 	int sock;
-	struct timeval timeout;
-
-	timeout.tv_sec = 5;
-	timeout.tv_usec = 0;
 
 	if ((he = gethostbyname(host))==NULL) {
 		return -1;
@@ -190,12 +186,6 @@ int data_pump(int net_fd, int pty_fd) {
 #endif /* RESTART_PTY */
 
 
-void close_tty(int tty_fd) {
-	if (conf.tty_name[0] != '\0') unlink(conf.tty_name);
-	close(tty_fd);
-}
-
-
 void sig_handler(int sig) {
 	pid_t pgrp;
 
@@ -217,12 +207,16 @@ void sig_handler(int sig) {
 
 
 void print_usage(char *name) {
-	printf( "%s %s\n", name, VERSION);
-	printf( "usage: %s [-v] -a address -p port [-t timeout]\n"
+	printf( "%s %s\n"
+		"This app connects a virtual serial port to a network exported serial port.\n"
+		"The serial port can be exported with nexbridge, SkyFi device etc. The app\n"
+		"is intended to be used with software like Stellarium that relies on serial\n"
+		"port to control the telescope mount, thus enabling it to control network\n"
+		"exported mounts too. (see nexbridge)\n\n", name, VERSION);
+	printf( "usage: %s [-v] -a address -p port [-T tty]\n"
 		"    -a  IP address to connect to\n"
 		"    -p  TCP port to connect to\n"
 		"    -T  virtual tty name to create\n"
-		"    -t  session timeout in seconds (0 never times out) [default: 0]\n"
 		"    -v  print version\n"
 		"    -h  print this help message\n\n", name);
 	printf( " Copyright (c)2014-2015 by Rumen Bogdanovski\n\n");
@@ -233,19 +227,18 @@ void config_defaults() {
 	conf.tcp_port = 0;
 	conf.address[0] = '\0';
 	conf.tty_name[0] = '\0';
-	conf.timeout = 0;
 }
 
 
 int main(int argc, char **argv) {
-	char tty_name[1024];
+	char tty_name[NAME_SIZZ];
 	int res, c;
 	int tcp_fd;
 	int tty_fd;
 	struct sigaction sa;
 
 	config_defaults();
-	while((c=getopt(argc,argv,"hva:p:t:T:"))!=-1){
+	while((c=getopt(argc,argv,"hva:p:T:"))!=-1){
 		switch(c){
 		case 'a':
 			strncpy(conf.address, optarg, 255);
@@ -253,21 +246,17 @@ int main(int argc, char **argv) {
 		case 'p':
 			conf.tcp_port = atoi(optarg);
 			break;
-		case 't':
-			conf.timeout = atoi(optarg);
-			break;
 		case 'T':
 			strncpy(conf.tty_name, optarg, 255);
 			break;
 		case 'h':
 			print_usage(argv[0]);
-			exit(1);
+			exit(0);
 		case 'v':
-			printf("tty2net version %s\n", VERSION);
-			exit(1);
+			printf("%s version %s\n", argv[0], VERSION);
+			exit(0);
 		case '?':
 		default:
-			printf("for help: %s -h\n", argv[0]);
 			printf("for help: %s -h\n", argv[0]);
 			exit(1);
 		}
@@ -313,7 +302,7 @@ int main(int argc, char **argv) {
 	}
 
 	do { /* recreate the pty if the file is closed by the app otherwise select() always returns */
-		tty_fd = open_pts(tty_name, 1024);
+		tty_fd = open_pts(tty_name, NAME_SIZZ);
 		if (tty_fd == -1) {
 			close(tcp_fd);
 			printf("Can not allocate virtual tty.\n");
