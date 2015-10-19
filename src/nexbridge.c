@@ -1,3 +1,8 @@
+/**************************************************************
+        nexbridge - export tty port on the network
+
+        (C)2013-2015 by Rumen G.Bogdanovski
+***************************************************************/
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <sys/types.h>
