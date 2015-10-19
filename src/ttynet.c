@@ -14,6 +14,7 @@
 #include <fcntl.h>
 #include <errno.h>
 #include <netdb.h>
+#include <signal.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -21,26 +22,24 @@
 #include <sys/select.h>
 #include "config.h"
 
+#define BUFSIZZ 1024
+#define h_addr h_addr_list[0] /* for backward compatibility */
+#define unlink_tty(tty_name) if ((tty_name[0]) != '\0') unlink(tty_name)
+
 typedef struct {
-	int port;
+	int tcp_port;
 	char address[255];
+	char tty_name[255];
 	int timeout;
 } config;
-
 config conf;
 
-//#define VERSION "0.1-a1"
 
-#define h_addr h_addr_list[0] /* for backward compatibility */
-
-#define BUFSIZZ 1024
-
-
-int open_ptym(char *pts_name_s, int pts_namesz) {
-	char *ptr;
+int open_pts(char *pts_name, int pts_name_size) {
+	char *pname;
 	int fdm;
 
-	fdm = posix_openpt(O_RDWR | O_NOCTTY | O_NONBLOCK);
+	fdm = posix_openpt(O_RDWR | O_NOCTTY);
 	if (fdm < 0)
 		return -1;
 	if (grantpt(fdm) < 0) {
@@ -51,14 +50,15 @@ int open_ptym(char *pts_name_s, int pts_namesz) {
 		close(fdm);
 		return -1;
 	}
-	if ((ptr = ptsname(fdm)) == NULL) {
+	if ((pname = ptsname(fdm)) == NULL) {
 		close(fdm);
 		return -1;
 	}
 
-	strncpy(pts_name_s, ptr, pts_namesz);
+	strncpy(pts_name, pname, pts_name_size);
 	return (fdm);
 }
+
 
 int open_tcp(char *host, int port) {
 	struct sockaddr_in srv_info;
@@ -88,6 +88,8 @@ int open_tcp(char *host, int port) {
 	return sock;
 }
 
+
+#ifndef RESTART_PTY
 int data_pump(int net_fd, int pty_fd) {
 	char buf[BUFSIZZ];
 	int r;
@@ -137,9 +139,8 @@ int data_pump(int net_fd, int pty_fd) {
 
 	return 0;
 }
-
-/*
-int data_pump1(int net_fd, int pty_fd) {
+#else /* RESTART_PTY */
+int data_pump(int net_fd, int pty_fd) {
 	char buf[BUFSIZZ];
 	int r;
 	int max;
@@ -164,8 +165,10 @@ int data_pump1(int net_fd, int pty_fd) {
 			}
 			r = write(pty_fd,buf,r);
 			if (r <= 0) {
-				if(r < 0) printf("write(pty_fd): %s\n",strerror(errno));
-				return -2;
+				if ((r < 0) && (errno != EAGAIN)) { // ignore the error if the buffer is full
+					printf("write(pty_fd): %s\n",strerror(errno));
+				}
+				continue;
 			}
 		}
 
@@ -185,41 +188,77 @@ int data_pump1(int net_fd, int pty_fd) {
 
 	return 0;
 }
-*/
+#endif /* RESTART_PTY */
+
+
+void close_tty(int tty_fd) {
+	if (conf.tty_name[0] != '\0') unlink(conf.tty_name);
+	close(tty_fd);
+}
+
+
+void sig_handler(int sig) {
+	pid_t pgrp;
+
+	#ifdef SIG_DEBUG
+	printf("SIG: pid=%d, signal=%d", getpid(), sig);
+	#endif
+	switch (sig) {
+	case SIGHUP:
+	case SIGPIPE:
+	case SIGTERM:
+	case SIGINT:
+	case SIGQUIT:
+	case SIGCHLD:
+		unlink_tty(conf.tty_name);
+		exit(0);
+		break;
+	}
+}
+
 
 void print_usage(char *name) {
 	printf( "%s %s\n", name, VERSION);
 	printf( "usage: %s [-v] -a address -p port [-t timeout]\n"
 		"    -a  IP address to connect to\n"
 		"    -p  TCP port to connect to\n"
+		"    -T  virtual tty name to create\n"
 		"    -t  session timeout in seconds (0 never times out) [default: 0]\n"
 		"    -v  print version\n"
 		"    -h  print this help message\n\n", name);
 	printf( " Copyright (c)2014-2015 by Rumen Bogdanovski\n\n");
 }
 
+
 void config_defaults() {
-	conf.port = 0;
+	conf.tcp_port = 0;
 	conf.address[0] = '\0';
+	conf.tty_name[0] = '\0';
 	conf.timeout = 0;
 }
+
 
 int main(int argc, char **argv) {
 	char tty_name[1024];
 	int res, c;
 	int tcp_fd;
 	int tty_fd;
+	struct sigaction sa;
 
-	while((c=getopt(argc,argv,"hva:p:t:"))!=-1){
+	config_defaults();
+	while((c=getopt(argc,argv,"hva:p:t:T:"))!=-1){
 		switch(c){
 		case 'a':
 			strncpy(conf.address, optarg, 255);
 			break;
 		case 'p':
-			conf.port = atoi(optarg);
+			conf.tcp_port = atoi(optarg);
 			break;
 		case 't':
 			conf.timeout = atoi(optarg);
+			break;
+		case 'T':
+			strncpy(conf.tty_name, optarg, 255);
 			break;
 		case 'h':
 			print_usage(argv[0]);
@@ -235,27 +274,65 @@ int main(int argc, char **argv) {
 		}
 	}
 
-	if ((conf.address == '\0') || (conf.port == 0)) {
+	if ((conf.address == '\0') || (conf.tcp_port == 0)) {
 		printf("Please specify address and port, for help: %s -h\n", argv[0]);
 		exit(1);
 	}
 
-	tcp_fd = open_tcp(conf.address, conf.port);
+	sa.sa_handler = sig_handler; // reap all dead processes
+	sigemptyset(&sa.sa_mask);
+	sa.sa_flags = 0;
+	if (sigaction(SIGCHLD, &sa, NULL) == -1) {
+		printf("sigaction(): %s",strerror(errno));
+		exit(1);
+	}
+	if (sigaction(SIGHUP, &sa, NULL) == -1) {
+		printf("sigaction(): %s",strerror(errno));
+		exit(1);
+	}
+	if (sigaction(SIGPIPE, &sa, NULL) == -1) {
+		printf("sigaction(): %s",strerror(errno));
+		exit(1);
+	}
+	if (sigaction(SIGTERM, &sa, NULL) == -1) {
+		printf("sigaction(): %s",strerror(errno));
+		exit(1);
+	}
+	if (sigaction(SIGINT, &sa, NULL) == -1) {
+		printf("sigaction(): %s",strerror(errno));
+		exit(1);
+	}
+	if (sigaction(SIGQUIT, &sa, NULL) == -1) {
+		printf("sigaction(): %s",strerror(errno));
+		exit(1);
+	}
+
+	tcp_fd = open_tcp(conf.address, conf.tcp_port);
 	if (tcp_fd == -1) {
-		printf("Can not connect to %s:%d.\n", conf.address, conf.port);
+		printf("Can not connect to %s:%d.\n", conf.address, conf.tcp_port);
 		exit(1);
 	}
 
 	do {	// recreate the pty if the file is closed by the app otherwise select() always returns
-		tty_fd = open_ptym(tty_name, 1024);
+		tty_fd = open_pts(tty_name, 1024);
 		if (tty_fd == -1) {
 			close(tcp_fd);
 			printf("Can not allocate virtual tty.\n");
 			exit(1);
 		}
-		printf("Created link: [%s] <=> [%s:%d]\n", tty_name, conf.address, conf.port);
+		printf("Connection: [%s] <=> [%s:%d]\n", tty_name, conf.address, conf.tcp_port);
+		if(conf.tty_name[0] != '\0') {
+			res=symlink(tty_name,conf.tty_name);
+			if (res < 0) {
+				printf("Can not create a symbolic link: %s\n",strerror(errno));
+				conf.tty_name[0]='\n';
+			} else {
+				printf("Use: '%s' to connect.\n", conf.tty_name);
+			}
+		}
 		res = data_pump(tcp_fd, tty_fd);
 		close(tty_fd);
+		unlink_tty(conf.tty_name);
 	} while (res == -2);
 
 	close(tcp_fd);
