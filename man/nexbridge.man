@@ -1,7 +1,7 @@
 .\" -*- nroff -*-
 .TH nexbridge 5 "November 2014" "nexbridge(5)" "nexbridge manual page"
 .SH NAME
-nexbridge - daemon to proxy Nexstar command over the network.
+nexbridge - daemon to proxy Nexstar (but not only) commands over the network.
 .SH SYNOPSIS
 nexbridge [options]
 
@@ -10,9 +10,11 @@ This this program transparently proxies the serial commands supported
 by the Celestron NexStar hand control over the network, so that the
 telescope can be controlled over the network. It is recommended to be
 used with libnexstar or NexStarCtl on the remote end.
-
-This includes NexStar GPS, NexStar GPS-SA, NexStar iSeries, NexStar SE
-Series, NexStar GT, CPC, SLT, Advanced-VX, Advanced-GT, and CGE mounts.
+However it proved to be very useful for exporting all kinds of telescope
+mounts on the network like Sky-Watcher, Meade etc. Nexbridge can be
+used directly with software like SkySafari or through ttynet(5) or other
+serial port emulator with software like Stellarium, to control the
+network exported telescopes.
 
 Communication to the hand control is 9600 bits/sec, no parity and one
 stop bit via the RS-232 port on the base of the hand control.
@@ -22,6 +24,21 @@ where XXX is user specified name with "-s" option.
 
 .SH OPTIONS
 Please use "nexbridge -h" for full option list.
+
+.SH EXAMPLE
+Connect the telescope mount connected on /dev/ttyUSB0 on computer sky with IP 192.168.0.10
+to /tmp/Telescope on computer earth, assuming there is a network connection between them:
+
+On computer sky do:
+
+.B $ nexbridge -n -P /dev/ttyUSB0 -p 9999
+
+On computer earth do:
+
+.B $ ttynet -a 192.168.0.10 -p 9999 -T /tmp/Telescope
+
+.SH SEE ALSO
+ttynet(5)
 
 .SH COPYRIGHT AND LICENSE
 

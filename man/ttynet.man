@@ -1,0 +1,44 @@
+.\" -*- nroff -*-
+.TH ttynet 5 "October 2015" "ttynet(5)" "ttynet manual page"
+.SH NAME
+ttynet - acquire virtual serial port and connect it to a network exported serial port.
+.SH SYNOPSIS
+ttynet [options]
+
+.SH DESCRIPTION
+This application connects a virtual serial port to a network exported serial port. The serial
+port can be exported with nexbridge(8), SkyFi device etc. The application is intended to be 
+used with software like Stellarium that relies on serial port to control telescope mounts,
+thus enabling it to control network exported mounts too.
+
+.SH OPTIONS
+Please use "ttynet -h" for full option list.
+
+.SH EXAMPLE
+Connect the telescope mount connected on /dev/ttyUSB0 on computer sky with IP 192.168.0.10 
+to /tmp/Telescope on computer earth, assuming there is a network connection between them:
+
+On computer sky do:
+
+.B $ nexbridge -n -P /dev/ttyUSB0 -p 9999
+
+On computer earth do:
+
+.B $ ttynet -a 192.168.0.10 -p 9999 -T /tmp/Telescope
+
+.SH SEE ALSO
+nexbridge(5)
+
+.SH COPYRIGHT AND LICENSE
+
+Copyright (C) 2013-2015 by Rumen G.Bogdanovski
+
+This is a free software, you can redistribute it and/or modify
+it under the terms of GPL3
+
+The author assumes no liability or responsibility for damage or injury
+to persons or property arising from any use of this product. Use it at
+your own risk.
+
+.SH BUGS
+If you find any, please send bug reports to rumen@skyarchive.org

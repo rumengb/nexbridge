@@ -211,7 +211,7 @@ void print_usage(char *name) {
 		"This app connects a virtual serial port to a network exported serial port.\n"
 		"The serial port can be exported with nexbridge, SkyFi device etc. The app\n"
 		"is intended to be used with software like Stellarium that relies on serial\n"
-		"port to control the telescope mount, thus enabling it to control network\n"
+		"port to control telescope mounts, thus enabling it to control network\n"
 		"exported mounts too. (see nexbridge)\n\n", name, VERSION);
 	printf( "usage: %s [-v] -a address -p port [-T tty]\n"
 		"    -a  IP address to connect to\n"
