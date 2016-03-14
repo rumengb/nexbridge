@@ -4,7 +4,7 @@
 
     (C)2013-2015 by Rumen G.Bogdanovski
 ***************************************************************/
-#define _XOPEN_SOURCE
+#define _XOPEN_SOURCE 600
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -20,6 +20,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <sys/select.h>
+#include <sys/stat.h>
 #include "config.h"
 
 #define NAME_SIZZ 1024
