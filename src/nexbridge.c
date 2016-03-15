@@ -1,7 +1,7 @@
 /**************************************************************
         nexbridge - export tty port on the network
 
-        (C)2013-2015 by Rumen G.Bogdanovski
+        (C)2013-2016 by Rumen G.Bogdanovski
 ***************************************************************/
 #include <arpa/inet.h>
 #include <netdb.h>
@@ -30,7 +30,33 @@ config conf;
 #define ATOMIC_INC(i) ((void)__sync_add_and_fetch(i,1))
 #define ATOMIC_DEC(i) ((void)__sync_sub_and_fetch(i,1))
 
-// get sockaddr, IPv4 or IPv6:
+sbaud_rate br[] = {
+	BR(  "1200", B1200),
+	BR(  "1800", B1800),
+	BR(  "2400", B2400),
+	BR(  "4800", B4800),
+	BR(  "9600", B9600),
+	BR( "19200", B19200),
+	BR( "38400", B38400),
+	BR( "57600", B57600),
+	BR("115200", B115200),
+	BR("230400", B230400),
+	BR("460800", B460800),
+	BR(      "", 0),
+};
+
+/* map string to actual baudrate value */
+int map_str_baudrate(char *baudrate) {
+	sbaud_rate *brp = br;
+	do {
+		if (brp->str[0]=='\0') return -1;
+		brp++;
+	} while (strncmp(brp->str, baudrate, brp->len));
+
+	return brp->value;
+}
+
+/* get sockaddr, IPv4 or IPv6: */
 void *get_in_addr(struct sockaddr *sa) {
 	if (sa->sa_family == AF_INET) {
 		return &(((struct sockaddr_in*)sa)->sin_addr);
@@ -85,11 +111,12 @@ void config_defaults() {
 	conf.svc_name[0] = '\0';
 	sprintf(conf.svc_type, "%s.%s", SVC_TYPE, SVC_PROTO);
 	strcpy(conf.tty_port, TTY_PORT);
+	conf.baudrate = B9600;
 	conf.timeout = SESS_TIMEOUT;
 	conf.max_conn = MAXCON;
 }
 
-int open_telescope(char *dev_file) {
+int open_telescope(char *dev_file, int baudrate) {
 	int dev_fd;
 	struct termios options;
 
@@ -103,8 +130,8 @@ int open_telescope(char *dev_file) {
 		return -1;
 	}
 
-	cfsetispeed(&options,B9600);
-	cfsetospeed(&options,B9600);
+	cfsetispeed(&options, baudrate);
+	cfsetospeed(&options, baudrate);
 	/* Finaly!!!!  Works on Linux & Solaris  */
 	options.c_lflag &= ~(ICANON|ECHO|ECHOE|ISIG|IEXTEN);
 	options.c_oflag &= ~(OPOST);
@@ -182,7 +209,7 @@ void handle_client(int fd1, int fd2) {
 
 void serve_client(int socket) {
 	int device;
-	device = open_telescope(conf.tty_port);
+	device = open_telescope(conf.tty_port, conf.baudrate);
 	if ( device < 0) {
 		LOG("open_telescope(): %s",strerror(errno));
 		close(socket);
@@ -240,7 +267,7 @@ void print_usage(char *name) {
 		"used directly with software like SkySafari or through ttynet or other\n"
 		"serial port emulator with software like Stellarium, to control the\n"
 		"network exported telescopes. (see ttynet)\n\n" );
-	printf( "usage: %s [-dn] [-a address] [-p port] [-m conns] [-P ttydev] [-t timeout]\n"
+	printf( "usage: %s [-dn] [-a address] [-p port] [-m conns] [-P ttydev] [-B baudrate] [-t timeout]\n"
 		"    -d  log debug information\n"
 		"    -n  do not daemonize, log to stderr\n"
 		"    -a  IP address to bind to [default: any]\n"
@@ -252,17 +279,19 @@ void print_usage(char *name) {
 		"    -T  Bonjour service type [default: '_nexbridge'}\n"
 		#endif
 		"    -P  Serial port to connect to telescope [default: %s]\n"
+		"    -B  baudrate (1200, 2400, 4800, 460800 etc) [default: %d]\n"
 		"    -t  session timeout in seconds [default: %d]\n"
 		"    -v  print version\n"
 		"    -h  print this help message\n\n",
-		name, PORT, TTY_PORT, SESS_TIMEOUT);
-	printf( " Copyright (c)2014-2015 by Rumen Bogdanovski\n\n");
+		name, PORT, TTY_PORT, 9600, SESS_TIMEOUT);
+	printf( " Copyright (c)2014-2016 by Rumen Bogdanovski\n\n");
 }
 
 
 int main(int argc, char **argv) {
 	int sock,s;
 	int c;
+	int baud;
 	pid_t pid, pgrp;
 	struct sockaddr_storage remote_addr;
 	socklen_t addr_size;
@@ -272,8 +301,16 @@ int main(int argc, char **argv) {
 
 	config_defaults();
 	setlogmask(LOG_UPTO (LOG_INFO));
-	while((c=getopt(argc,argv,"dhnva:m:p:P:s:T:t:"))!=-1){
+	while((c=getopt(argc,argv,"dhnva:b:m:p:P:s:T:t:"))!=-1){
 		switch(c){
+		case 'B':
+			conf.baudrate = map_str_baudrate(optarg);
+			LOG_DBG("baudrate = %d", conf.baudrate);
+			if (conf.baudrate == -1) {
+				printf("Baudrate is not valid: %d\n", conf.baudrate);
+				exit(1);
+			}
+			break;
 		case 'a':
 			snprintf(conf.address,255,"%s", optarg);
 			LOG_DBG("address = %s", conf.address);

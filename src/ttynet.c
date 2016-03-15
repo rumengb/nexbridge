@@ -2,7 +2,7 @@
     ttynet - connect a virtual tty port to a network
     exported tty device
 
-    (C)2013-2015 by Rumen G.Bogdanovski
+    (C)2013-2016 by Rumen G.Bogdanovski
 ***************************************************************/
 #define _XOPEN_SOURCE 600
 
@@ -220,7 +220,7 @@ void print_usage(char *name) {
 		"    -T  virtual tty name to create\n"
 		"    -v  print version\n"
 		"    -h  print this help message\n\n", name);
-	printf( " Copyright (c)2014-2015 by Rumen Bogdanovski\n\n");
+	printf( " Copyright (c)2014-2016 by Rumen Bogdanovski\n\n");
 }
 
 

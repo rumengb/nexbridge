@@ -11,11 +11,18 @@ typedef struct {
 	char address[255];
 	char svc_name[255];
 	char svc_type[255];
+	int baudrate;
 	int timeout;
 	int max_conn;
 } config;
-
 extern config conf;
+
+typedef struct {
+	int value;
+	size_t len;
+	char *str;
+} sbaud_rate;
+#define BR(str,val) { val, sizeof(str), str }
 
 #define LOG(msg, ...) \
 	{ if(conf.is_daemon) { \
