@@ -48,10 +48,10 @@ sbaud_rate br[] = {
 /* map string to actual baudrate value */
 int map_str_baudrate(char *baudrate) {
 	sbaud_rate *brp = br;
-	do {
+	while (strncmp(brp->str, baudrate, brp->len)) {
 		if (brp->str[0]=='\0') return -1;
 		brp++;
-	} while (strncmp(brp->str, baudrate, brp->len));
+	}
 
 	return brp->value;
 }
@@ -301,7 +301,7 @@ int main(int argc, char **argv) {
 
 	config_defaults();
 	setlogmask(LOG_UPTO (LOG_INFO));
-	while((c=getopt(argc,argv,"dhnva:b:m:p:P:s:T:t:"))!=-1){
+	while((c=getopt(argc,argv,"dhnva:B:m:p:P:s:T:t:"))!=-1){
 		switch(c){
 		case 'B':
 			conf.baudrate = map_str_baudrate(optarg);
