@@ -3,7 +3,7 @@
 
 AC_PREREQ(2.57)
 AC_INIT(nexbridge,0.4-b1, rumen@skyarchive.org)
-AM_INIT_AUTOMAKE(nexbridge,0.3-b1)
+AM_INIT_AUTOMAKE(nexbridge,0.4-b1)
 AC_CONFIG_SRCDIR([src/nexbridge.c])
 AC_CONFIG_HEADER([src/config.h])
 
