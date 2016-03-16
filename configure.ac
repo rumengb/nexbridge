@@ -63,6 +63,7 @@ test ${os_type} = "Darwin" && default_device="/dev/cu.usbserial"
 
 AC_DEFINE_UNQUOTED(TTY_PORT, "${default_device}", [Default Device serial port])
 AC_DEFINE_UNQUOTED(PORT, 9999, [Default TCP port])
+AC_DEFINE_UNQUOTED(DATA_FORMAT, "8N1", [Default serial data format])
 AC_DEFINE_UNQUOTED(MAXCON, 1, [Default Max clients])
 AC_DEFINE_UNQUOTED(SESS_TIMEOUT, 0, [Session timeout])
 AC_DEFINE_UNQUOTED(SVC_TYPE, "_nexbridge", [Bonjour service name])

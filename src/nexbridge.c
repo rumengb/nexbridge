@@ -7,6 +7,8 @@
 #include <netdb.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <sys/file.h>
+#include <sys/ioctl.h>
 #include <signal.h>
 #include <unistd.h>
 #include <ctype.h>
@@ -31,17 +33,43 @@ config conf;
 #define ATOMIC_DEC(i) ((void)__sync_sub_and_fetch(i,1))
 
 sbaud_rate br[] = {
-	BR(  "1200", B1200),
-	BR(  "1800", B1800),
-	BR(  "2400", B2400),
-	BR(  "4800", B4800),
-	BR(  "9600", B9600),
-	BR( "19200", B19200),
-	BR( "38400", B38400),
-	BR( "57600", B57600),
-	BR("115200", B115200),
-	BR("230400", B230400),
-	BR("460800", B460800),
+	BR(     "50", B50),
+	BR(     "75", B75),
+	BR(    "110", B110),
+	BR(    "134", B134),
+	BR(    "150", B150),
+	BR(    "200", B200),
+	BR(    "300", B300),
+	BR(    "600", B600),
+	BR(   "1200", B1200),
+	BR(   "1800", B1800),
+	BR(   "2400", B2400),
+	BR(   "4800", B4800),
+	BR(   "9600", B9600),
+	BR(  "19200", B19200),
+	BR(  "38400", B38400),
+	BR(  "57600", B57600),
+	BR( "115200", B115200),
+	BR( "230400", B230400),
+	BR( "460800", B460800),
+	BR( "500000", B500000),
+	BR( "576000", B576000),
+	BR( "921600", B921600),
+	BR("1000000", B1000000),
+	BR("1152000", B1152000),
+    /*
+    case 1500000 : baudr = B1500000;
+                   break;
+    case 2000000 : baudr = B2000000;
+                   break;
+    case 2500000 : baudr = B2500000;
+                   break;
+    case 3000000 : baudr = B3000000;
+                   break;
+    case 3500000 : baudr = B3500000;
+                   break;
+    case 4000000 : baudr = B4000000;
+	*/
 	BR(      "", 0),
 };
 
@@ -111,48 +139,116 @@ void config_defaults() {
 	conf.svc_name[0] = '\0';
 	sprintf(conf.svc_type, "%s.%s", SVC_TYPE, SVC_PROTO);
 	strcpy(conf.tty_port, TTY_PORT);
+	strcpy(conf.dataformat, DATA_FORMAT);
 	conf.baudrate = B9600;
 	conf.timeout = SESS_TIMEOUT;
 	conf.max_conn = MAXCON;
 }
 
-int open_telescope(char *dev_file, int baudrate) {
-	int dev_fd;
+int open_tty(char *tty_name, int baudr, const char *mode, struct termios *old_options) {
+	int status;
+	int tty_fd;
 	struct termios options;
+	int cbits=CS8, cpar=0, ipar=IGNPAR, bstop=0;
 
-	if ((dev_fd = open(dev_file, O_RDWR | O_NOCTTY | O_SYNC))==-1) {
+	if(strlen(mode) != 3) {
+		LOG("invalid data frmat \"%s\"\n", mode);
 		return -1;
 	}
 
-	memset(&options, 0, sizeof options);
-	if (tcgetattr(dev_fd, &options) != 0) {
-		close(dev_fd);
+	switch(mode[0]) {
+		case '8': cbits = CS8; break;
+		case '7': cbits = CS7; break;
+		case '6': cbits = CS6; break;
+		case '5': cbits = CS5; break;
+		default :
+			LOG("invalid number of data-bits '%c'\n", mode[0]);
+			return -1;
+			break;
+	}
+
+	switch(mode[1]) {
+		case 'N':
+		case 'n':
+			cpar = 0;
+			ipar = IGNPAR;
+			break;
+		case 'E':
+		case 'e':
+			cpar = PARENB;
+			ipar = INPCK;
+			break;
+		case 'O':
+		case 'o':
+			cpar = (PARENB | PARODD);
+			ipar = INPCK;
+			break;
+		default :
+			LOG("invalid parity '%c'\n", mode[1]);
+			return -1;
+            break;
+	}
+
+	switch(mode[2]) {
+		case '1': bstop = 0; break;
+		case '2': bstop = CSTOPB; break;
+		default :
+			LOG("invalid number of stop bits '%c'\n", mode[2]);
+			return -1;
+			break;
+	}
+
+	tty_fd = open(tty_name, O_RDWR | O_NOCTTY | O_SYNC);
+	if (tty_fd == -1) {
+		perror("unable to open comport ");
 		return -1;
 	}
 
-	cfsetispeed(&options, baudrate);
-	cfsetospeed(&options, baudrate);
-	/* Finaly!!!!  Works on Linux & Solaris  */
-	options.c_lflag &= ~(ICANON|ECHO|ECHOE|ISIG|IEXTEN);
-	options.c_oflag &= ~(OPOST);
-	options.c_iflag &= ~(INLCR|ICRNL|IXON|IXOFF|IXANY|IMAXBEL);
-	options.c_cflag &= ~PARENB;
-	options.c_cflag &= ~CSTOPB;
-	options.c_cflag &= ~CSIZE;
-	options.c_cflag |= CS8;
-	options.c_cc[VMIN]  = 0;	// read doesn't block
-	options.c_cc[VTIME] = 50;	// 5 seconds read timeout
+	/* lock access so that another process can't also use the port */
+	/*
+	if(flock(tty_fd, LOCK_EX | LOCK_NB) != 0) {
+		close(tty_fd);
+		perror("Another process has locked the comport.");
+		return -1;
+	}
+	*/
+	if (old_options) {
+		if (tcgetattr(tty_fd, old_options) == -1) {
+			close(tty_fd);
+			perror("unable to read portsettings ");
+			return -1;
+		}
+	}
 
-	if (tcsetattr(dev_fd,TCSANOW, &options) != 0) {
-		close(dev_fd);
+	memset(&options, 0, sizeof(options));  /* clear the new struct */
+
+	options.c_cflag = cbits | cpar | bstop | CLOCAL | CREAD;
+	options.c_iflag = ipar;
+	options.c_oflag = 0;
+	options.c_lflag = 0;
+	options.c_cc[VMIN] = 0;      /* block untill n bytes are received */
+	options.c_cc[VTIME] = 50;     /* block untill a timer expires (n * 100 mSec.) */
+
+	cfsetispeed(&options, baudr);
+	cfsetospeed(&options, baudr);
+
+	if (tcsetattr(tty_fd, TCSANOW, &options) == -1) {
+		close(tty_fd);
+		perror("unable to adjust portsettings ");
 		return -1;
 	}
 
-	return dev_fd;
+	return tty_fd;
 }
 
-int close_telescope(int devfd) {
-	return close(devfd);
+void close_tty(int tty_fd, struct termios *old_options) {
+	int status;
+
+	if(old_options) tcsetattr(tty_fd, TCSANOW, old_options);
+
+	close(tty_fd);
+
+	// flock(tty_fd, LOCK_UN); /* free the port so that others can use it. */
 }
 
 void handle_client(int fd1, int fd2) {
@@ -171,7 +267,7 @@ void handle_client(int fd1, int fd2) {
 			r = select(max + 1, &readset, NULL, NULL, NULL);
 		} while (r == -1 && errno == EINTR);
 
-		if ( r<0 ) goto server_end;
+		if ( r<0 ) return;
 
 		if(FD_ISSET(fd1,&readset)) {
 			r = read(fd1,buf,BUFSIZZ-1);
@@ -199,17 +295,12 @@ void handle_client(int fd1, int fd2) {
 			}
 		}
 	} while (!end);
-
-	server_end:
-	close(fd1);
-	close(fd2);
-	LOG("Connection closed.");
-	_exit(0);
 }
 
 void serve_client(int socket) {
 	int device;
-	device = open_telescope(conf.tty_port, conf.baudrate);
+	struct termios saved_options;
+	device = open_tty(conf.tty_port, conf.baudrate, conf.dataformat, &saved_options);
 	if ( device < 0) {
 		LOG("open_telescope(): %s",strerror(errno));
 		close(socket);
@@ -217,6 +308,10 @@ void serve_client(int socket) {
 	}
 
 	handle_client(device, socket);
+	close_tty(device, &saved_options);
+	close(socket);
+	LOG("Connection closed.");
+	_exit(0);
 }
 
 int tcp_listen(in_addr_t addr, int port) {
@@ -280,10 +375,11 @@ void print_usage(char *name) {
 		#endif
 		"    -P  Serial port to connect to telescope [default: %s]\n"
 		"    -B  baudrate (1200, 2400, 4800, 460800 etc) [default: %d]\n"
+		"    -F  serial data format, databits/parity/stopbits (8N1, 7E2 etc) [default: %s]\n"
 		"    -t  session timeout in seconds [default: %d]\n"
 		"    -v  print version\n"
 		"    -h  print this help message\n\n",
-		name, PORT, TTY_PORT, 9600, SESS_TIMEOUT);
+		name, PORT, TTY_PORT, 9600, DATA_FORMAT, SESS_TIMEOUT);
 	printf( " Copyright (c)2014-2016 by Rumen Bogdanovski\n\n");
 }
 

@@ -11,6 +11,7 @@ typedef struct {
 	char address[255];
 	char svc_name[255];
 	char svc_type[255];
+	char dataformat[10];
 	int baudrate;
 	int timeout;
 	int max_conn;
