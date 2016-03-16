@@ -2,6 +2,7 @@
 #define __NEXBRIDGE_H__
 
 #include <syslog.h>
+#include <termios.h>
 #include <stdio.h>
 
 typedef struct {
@@ -11,10 +12,11 @@ typedef struct {
 	char address[255];
 	char svc_name[255];
 	char svc_type[255];
-	char dataformat[10];
-	int baudrate;
+	char dataformat[15];
+	char baudrate[15];
 	int timeout;
 	int max_conn;
+	struct termios options;
 } config;
 extern config conf;
 

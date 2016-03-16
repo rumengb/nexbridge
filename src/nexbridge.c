@@ -57,24 +57,17 @@ sbaud_rate br[] = {
 	BR( "921600", B921600),
 	BR("1000000", B1000000),
 	BR("1152000", B1152000),
-    /*
-    case 1500000 : baudr = B1500000;
-                   break;
-    case 2000000 : baudr = B2000000;
-                   break;
-    case 2500000 : baudr = B2500000;
-                   break;
-    case 3000000 : baudr = B3000000;
-                   break;
-    case 3500000 : baudr = B3500000;
-                   break;
-    case 4000000 : baudr = B4000000;
-	*/
+	BR("1500000", B1500000),
+	BR("2000000", B2000000),
+	BR("2500000", B2500000),
+	BR("3000000", B3000000),
+	BR("3500000", B3500000),
+	BR("4000000", B4000000),
 	BR(      "", 0),
 };
 
 /* map string to actual baudrate value */
-int map_str_baudrate(char *baudrate) {
+inline int map_str_baudrate(const char *baudrate) {
 	sbaud_rate *brp = br;
 	while (strncmp(brp->str, baudrate, brp->len)) {
 		if (brp->str[0]=='\0') return -1;
@@ -132,27 +125,18 @@ void session_timeout(int sig) {
 	_exit(0);
 }
 
-void config_defaults() {
-	conf.is_daemon = 1;
-	conf.server_port = PORT;
-	conf.address[0] = '\0';
-	conf.svc_name[0] = '\0';
-	sprintf(conf.svc_type, "%s.%s", SVC_TYPE, SVC_PROTO);
-	strcpy(conf.tty_port, TTY_PORT);
-	strcpy(conf.dataformat, DATA_FORMAT);
-	conf.baudrate = B9600;
-	conf.timeout = SESS_TIMEOUT;
-	conf.max_conn = MAXCON;
-}
-
-int open_tty(char *tty_name, int baudr, const char *mode, struct termios *old_options) {
-	int status;
-	int tty_fd;
-	struct termios options;
+int configure_tty_options(struct termios *options, const char *baudrate, const char *mode) {
 	int cbits=CS8, cpar=0, ipar=IGNPAR, bstop=0;
+	int baudr=0;
+
+	baudr = map_str_baudrate(baudrate);
+	if (baudr == -1) {
+		printf("Baudrate is not valid: %s\n", baudrate);
+		return -1;
+	}
 
 	if(strlen(mode) != 3) {
-		LOG("invalid data frmat \"%s\"\n", mode);
+		printf("Invalid data frmat \"%s\"\n", mode);
 		return -1;
 	}
 
@@ -162,7 +146,7 @@ int open_tty(char *tty_name, int baudr, const char *mode, struct termios *old_op
 		case '6': cbits = CS6; break;
 		case '5': cbits = CS5; break;
 		default :
-			LOG("invalid number of data-bits '%c'\n", mode[0]);
+			printf("Invalid number of data bits '%c'\n", mode[0]);
 			return -1;
 			break;
 	}
@@ -184,7 +168,7 @@ int open_tty(char *tty_name, int baudr, const char *mode, struct termios *old_op
 			ipar = INPCK;
 			break;
 		default :
-			LOG("invalid parity '%c'\n", mode[1]);
+			printf("Invalid parity '%c'\n", mode[1]);
 			return -1;
             break;
 	}
@@ -193,10 +177,42 @@ int open_tty(char *tty_name, int baudr, const char *mode, struct termios *old_op
 		case '1': bstop = 0; break;
 		case '2': bstop = CSTOPB; break;
 		default :
-			LOG("invalid number of stop bits '%c'\n", mode[2]);
+			printf("Invalid number of stop bits '%c'\n", mode[2]);
 			return -1;
 			break;
 	}
+
+	memset(options, 0, sizeof(*options));  /* clear options struct */
+
+	options->c_cflag = cbits | cpar | bstop | CLOCAL | CREAD;
+	options->c_iflag = ipar;
+	options->c_oflag = 0;
+	options->c_lflag = 0;
+	options->c_cc[VMIN] = 0;       /* block untill n bytes are received */
+	options->c_cc[VTIME] = 50;     /* block untill a timer expires (n * 100 mSec.) */
+
+	cfsetispeed(options, baudr);
+	cfsetospeed(options, baudr);
+
+	return 0;
+}
+
+void config_defaults() {
+	conf.is_daemon = 1;
+	conf.server_port = PORT;
+	conf.address[0] = '\0';
+	conf.svc_name[0] = '\0';
+	sprintf(conf.svc_type, "%s.%s", SVC_TYPE, SVC_PROTO);
+	strcpy(conf.tty_port, TTY_PORT);
+	strcpy(conf.dataformat, DATA_FORMAT);
+	strcpy(conf.baudrate, BAUDRATE);
+	conf.timeout = SESS_TIMEOUT;
+	conf.max_conn = MAXCON;
+	configure_tty_options(&conf.options, conf.baudrate, conf.dataformat);
+}
+
+int open_tty(const char *tty_name, const struct termios *options, struct termios *old_options) {
+	int tty_fd;
 
 	tty_fd = open(tty_name, O_RDWR | O_NOCTTY | O_SYNC);
 	if (tty_fd == -1) {
@@ -212,6 +228,7 @@ int open_tty(char *tty_name, int baudr, const char *mode, struct termios *old_op
 		return -1;
 	}
 	*/
+
 	if (old_options) {
 		if (tcgetattr(tty_fd, old_options) == -1) {
 			close(tty_fd);
@@ -220,19 +237,7 @@ int open_tty(char *tty_name, int baudr, const char *mode, struct termios *old_op
 		}
 	}
 
-	memset(&options, 0, sizeof(options));  /* clear the new struct */
-
-	options.c_cflag = cbits | cpar | bstop | CLOCAL | CREAD;
-	options.c_iflag = ipar;
-	options.c_oflag = 0;
-	options.c_lflag = 0;
-	options.c_cc[VMIN] = 0;      /* block untill n bytes are received */
-	options.c_cc[VTIME] = 50;     /* block untill a timer expires (n * 100 mSec.) */
-
-	cfsetispeed(&options, baudr);
-	cfsetospeed(&options, baudr);
-
-	if (tcsetattr(tty_fd, TCSANOW, &options) == -1) {
+	if (tcsetattr(tty_fd, TCSANOW, options) == -1) {
 		close(tty_fd);
 		perror("unable to adjust portsettings ");
 		return -1;
@@ -300,9 +305,9 @@ void handle_client(int fd1, int fd2) {
 void serve_client(int socket) {
 	int device;
 	struct termios saved_options;
-	device = open_tty(conf.tty_port, conf.baudrate, conf.dataformat, &saved_options);
+	device = open_tty(conf.tty_port, &conf.options, &saved_options);
 	if ( device < 0) {
-		LOG("open_telescope(): %s",strerror(errno));
+		LOG("open_tty(): %s", strerror(errno));
 		close(socket);
 		_exit(1);
 	}
@@ -374,12 +379,12 @@ void print_usage(char *name) {
 		"    -T  Bonjour service type [default: '_nexbridge'}\n"
 		#endif
 		"    -P  Serial port to connect to telescope [default: %s]\n"
-		"    -B  baudrate (1200, 2400, 4800, 460800 etc) [default: %d]\n"
+		"    -B  baudrate (1200, 2400, 4800, 460800 etc) [default: %s]\n"
 		"    -F  serial data format, databits/parity/stopbits (8N1, 7E2 etc) [default: %s]\n"
 		"    -t  session timeout in seconds [default: %d]\n"
 		"    -v  print version\n"
 		"    -h  print this help message\n\n",
-		name, PORT, TTY_PORT, 9600, DATA_FORMAT, SESS_TIMEOUT);
+		name, PORT, TTY_PORT, BAUDRATE, DATA_FORMAT, SESS_TIMEOUT);
 	printf( " Copyright (c)2014-2016 by Rumen Bogdanovski\n\n");
 }
 
@@ -397,15 +402,15 @@ int main(int argc, char **argv) {
 
 	config_defaults();
 	setlogmask(LOG_UPTO (LOG_INFO));
-	while((c=getopt(argc,argv,"dhnva:B:m:p:P:s:T:t:"))!=-1){
+	while((c=getopt(argc, argv, "dhnva:B:F:m:p:P:s:T:t:"))!=-1){
 		switch(c){
 		case 'B':
-			conf.baudrate = map_str_baudrate(optarg);
-			LOG_DBG("baudrate = %d", conf.baudrate);
-			if (conf.baudrate == -1) {
-				printf("Baudrate is not valid: %d\n", conf.baudrate);
-				exit(1);
-			}
+			snprintf(conf.baudrate,15,"%s", optarg);
+			LOG_DBG("baudrate = %s", conf.baudrate);
+			break;
+		case 'F':
+			snprintf(conf.dataformat,15,"%s", optarg);
+			LOG_DBG("dataformat = %s", conf.dataformat);
 			break;
 		case 'a':
 			snprintf(conf.address,255,"%s", optarg);
@@ -464,6 +469,10 @@ int main(int argc, char **argv) {
 		addr = INADDR_ANY;
 	}
 
+	if (configure_tty_options(&conf.options, conf.baudrate, conf.dataformat) == -1) {
+		exit(1);
+	}
+
 	if (conf.is_daemon) daemonize();
 
 	sa.sa_handler = sig_handler; // reap all dead processes
@@ -508,7 +517,8 @@ int main(int argc, char **argv) {
 		mdns_start();
 	}
 
-	LOG("Version %s started on %s:%d",VERSION, conf.address, conf.server_port);
+	LOG("Version %s started on %s:%d ",VERSION, conf.address, conf.server_port);
+	LOG("Forwarding %s:%d <-> %s at %s %s", conf.address, conf.server_port, conf.tty_port, conf.baudrate, conf.dataformat);
 
 	while(1) {
 		addr_size = sizeof remote_addr;

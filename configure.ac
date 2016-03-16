@@ -2,7 +2,7 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ(2.57)
-AC_INIT(nexbridge,0.3-b1, rumen@skyarchive.org)
+AC_INIT(nexbridge,0.4-b1, rumen@skyarchive.org)
 AM_INIT_AUTOMAKE(nexbridge,0.3-b1)
 AC_CONFIG_SRCDIR([src/nexbridge.c])
 AC_CONFIG_HEADER([src/config.h])
@@ -64,6 +64,7 @@ test ${os_type} = "Darwin" && default_device="/dev/cu.usbserial"
 AC_DEFINE_UNQUOTED(TTY_PORT, "${default_device}", [Default Device serial port])
 AC_DEFINE_UNQUOTED(PORT, 9999, [Default TCP port])
 AC_DEFINE_UNQUOTED(DATA_FORMAT, "8N1", [Default serial data format])
+AC_DEFINE_UNQUOTED(BAUDRATE, "9600", [Default serial baud rate])
 AC_DEFINE_UNQUOTED(MAXCON, 1, [Default Max clients])
 AC_DEFINE_UNQUOTED(SESS_TIMEOUT, 0, [Session timeout])
 AC_DEFINE_UNQUOTED(SVC_TYPE, "_nexbridge", [Bonjour service name])
