@@ -67,6 +67,7 @@ AC_DEFINE_UNQUOTED(DATA_FORMAT, "8N1", [Default serial data format])
 AC_DEFINE_UNQUOTED(BAUDRATE, "9600", [Default serial baud rate])
 AC_DEFINE_UNQUOTED(MAXCON, 1, [Default Max clients])
 AC_DEFINE_UNQUOTED(SESS_TIMEOUT, 0, [Session timeout])
+AC_DEFINE_UNQUOTED(RECONNECT_TIME, 3, [Default interval between reconnects for ttynet in seconds])
 AC_DEFINE_UNQUOTED(SVC_TYPE, "_nexbridge", [Bonjour service name])
 AC_DEFINE_UNQUOTED(SVC_PROTO, "_tcp", [Bonjour service type])
 

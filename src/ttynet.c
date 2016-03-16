@@ -163,7 +163,7 @@ void sig_handler(int sig) {
 
 
 void print_usage(char *name) {
-	printf( "%s %s\n"
+	printf( "%s version %s\n"
 		"This app connects a virtual serial port to a network exported serial port.\n"
 		"The serial port can be exported with nexbridge, SkyFi device etc. The app\n"
 		"is intended to be used with software like Stellarium that relies on serial\n"
@@ -173,10 +173,10 @@ void print_usage(char *name) {
 		"    -a  IP address to connect to\n"
 		"    -p  TCP port to connect to\n"
 		"    -r  reconnect when virtual port is closed\n"
-		"    -t  delay between reconnects in seconds (used with -r) [default: 3]\n"
+		"    -t  delay between reconnects in seconds (used with -r) [default: %d]\n"
 		"    -T  virtual tty name to create\n"
 		"    -v  print version\n"
-		"    -h  print this help message\n\n", name);
+		"    -h  print this help message\n\n", name, RECONNECT_TIME);
 	printf( " Copyright (c)2014-2016 by Rumen Bogdanovski\n\n");
 }
 
@@ -186,7 +186,7 @@ void config_defaults() {
 	conf.address[0] = '\0';
 	conf.tty_name[0] = '\0';
 	conf.reconnect = 0;
-	conf.reconnect_time = 3;
+	conf.reconnect_time = RECONNECT_TIME;
 }
 
 
@@ -294,6 +294,7 @@ int main(int argc, char **argv) {
 				}
 			}
 		}
+
 		res = data_pump(tcp_fd, tty_fd, conf.reconnect);
 
 		close(tty_fd);
