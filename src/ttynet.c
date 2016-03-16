@@ -30,6 +30,8 @@
 
 typedef struct {
 	int tcp_port;
+	char reconnect;
+	int reconnect_time;
 	char address[NAME_SIZZ];
 	char tty_name[NAME_SIZZ];
 } config;
@@ -86,8 +88,7 @@ int open_tcp(char *host, int port) {
 }
 
 
-#ifndef RESTART_PTY
-int data_pump(int net_fd, int pty_fd) {
+int data_pump(int net_fd, int pty_fd, char exit_on_close) {
 	char buf[BUFSIZZ];
 	int r;
 	int max;
@@ -122,57 +123,12 @@ int data_pump(int net_fd, int pty_fd) {
 		if(FD_ISSET(pty_fd,&readset)) {
 			r = read(pty_fd,buf,BUFSIZZ-1);
 			if (r <= 0) {
-				usleep(50000); /* offload the cpu as once the client closes tty -> FD_ISSET. Wired?! */
-				continue;
-			}
-			r = write(net_fd,buf,r);
-			if (r <= 0) {
-				if(r < 0) printf("write(net_fd): %s\n",strerror(errno));
-				return -1;
-			}
-		}
-	} while (1);
-
-	return 0;
-}
-#else /* RESTART_PTY */
-int data_pump(int net_fd, int pty_fd) {
-	char buf[BUFSIZZ];
-	int r;
-	int max;
-	fd_set readset;
-
-	do {
-		do {
-			FD_ZERO(&readset);
-			FD_SET(net_fd, &readset);
-			FD_SET(pty_fd, &readset);
-			max = (net_fd > pty_fd) ? net_fd : pty_fd;
-			r = select(max + 1, &readset, NULL, NULL, NULL);
-		} while (r == -1 && errno == EINTR);
-
-		if ( r < 0 ) return -1;
-
-		if(FD_ISSET(net_fd,&readset)) {
-			r = read(net_fd,buf,BUFSIZZ-1);
-			if (r <= 0) {
-				if(r < 0) printf("read(net_fd): %s\n",strerror(errno));
-				return -1;
-			}
-			r = write(pty_fd,buf,r);
-			if (r <= 0) {
-				if ((r < 0) && (errno != EAGAIN)) { /* ignore the error if the buffer is full */
-					printf("write(pty_fd): %s\n",strerror(errno));
+				if (exit_on_close) {
+					return -2;
+				} else {
+					usleep(50000); /* offload the cpu as once the client closes tty -> FD_ISSET. Wired?! */
+					continue;
 				}
-				continue;
-			}
-		}
-
-		if(FD_ISSET(pty_fd,&readset)) {
-			r = read(pty_fd,buf,BUFSIZZ-1);
-			if (r <= 0) {
-				if(r < 0) printf("read(pty_fd): %s\n",strerror(errno));
-				return -2;
 			}
 			r = write(net_fd,buf,r);
 			if (r <= 0) {
@@ -184,7 +140,6 @@ int data_pump(int net_fd, int pty_fd) {
 
 	return 0;
 }
-#endif /* RESTART_PTY */
 
 
 void sig_handler(int sig) {
@@ -214,9 +169,11 @@ void print_usage(char *name) {
 		"is intended to be used with software like Stellarium that relies on serial\n"
 		"port to control telescope mounts, thus enabling it to control network\n"
 		"exported mounts too. (see nexbridge)\n\n", name, VERSION);
-	printf( "usage: %s [-v] -a address -p port [-T tty]\n"
+	printf( "usage: %s [-vr] -a address -p port [-T tty] [-t seconds]\n"
 		"    -a  IP address to connect to\n"
 		"    -p  TCP port to connect to\n"
+		"    -r  reconnect when virtual port is closed\n"
+		"    -t  delay between reconnects in seconds (used with -r) [default: 3]\n"
 		"    -T  virtual tty name to create\n"
 		"    -v  print version\n"
 		"    -h  print this help message\n\n", name);
@@ -228,6 +185,8 @@ void config_defaults() {
 	conf.tcp_port = 0;
 	conf.address[0] = '\0';
 	conf.tty_name[0] = '\0';
+	conf.reconnect = 0;
+	conf.reconnect_time = 3;
 }
 
 
@@ -239,13 +198,16 @@ int main(int argc, char **argv) {
 	struct sigaction sa;
 
 	config_defaults();
-	while((c=getopt(argc,argv,"hva:p:T:"))!=-1){
+	while((c=getopt(argc,argv,"hvra:p:T:t:"))!=-1){
 		switch(c){
 		case 'a':
 			strncpy(conf.address, optarg, 255);
 			break;
 		case 'p':
 			conf.tcp_port = atoi(optarg);
+			break;
+		case 'r':
+			conf.reconnect = 1;
 			break;
 		case 'T':
 			strncpy(conf.tty_name, optarg, 255);
@@ -256,6 +218,9 @@ int main(int argc, char **argv) {
 		case 'v':
 			printf("%s version %s\n", argv[0], VERSION);
 			exit(0);
+		case 't':
+			conf.reconnect_time = atoi(optarg);
+			break;
 		case '?':
 		default:
 			printf("for help: %s -h\n", argv[0]);
@@ -265,6 +230,11 @@ int main(int argc, char **argv) {
 
 	if ((conf.address == '\0') || (conf.tcp_port == 0)) {
 		printf("Please specify address and port, for help: %s -h\n", argv[0]);
+		exit(1);
+	}
+
+	if ((conf.reconnect_time < 1) || (conf.reconnect_time > 3600)) {
+		printf("Reconnection time should be between 1 and 3600 seconds, for help: %s -h\n", argv[0]);
 		exit(1);
 	}
 
@@ -296,13 +266,12 @@ int main(int argc, char **argv) {
 		exit(1);
 	}
 
-	tcp_fd = open_tcp(conf.address, conf.tcp_port);
-	if (tcp_fd == -1) {
-		printf("Can not connect to %s:%d.\n", conf.address, conf.tcp_port);
-		exit(1);
-	}
-
 	do { /* recreate the pty if the file is closed by the app otherwise select() always returns */
+		tcp_fd = open_tcp(conf.address, conf.tcp_port);
+		if (tcp_fd == -1) {
+			printf("Can not connect to %s:%d.\n", conf.address, conf.tcp_port);
+			exit(1);
+		}
 		tty_fd = open_pts(tty_name, NAME_SIZZ);
 		if (tty_fd == -1) {
 			close(tcp_fd);
@@ -319,19 +288,25 @@ int main(int argc, char **argv) {
 				printf("Use: '%s' to connect.\n", conf.tty_name);
 			}
 			if(geteuid() == 0) { /* if root allow everyone to use it (crw-rw-rw-) */
-				res = chmod(conf.tty_name,0666);
+				res = chmod(conf.tty_name, 0666);
 				if (res < 0) {
 					printf("Could not change mode: %s\n",strerror(errno));
 				}
 			}
 		}
-		res = data_pump(tcp_fd, tty_fd);
+		res = data_pump(tcp_fd, tty_fd, conf.reconnect);
+
 		close(tty_fd);
 		unlink_tty(conf.tty_name);
+		close(tcp_fd);
+		printf("Remote connection closed.\n");
+		if (conf.reconnect) {
+			printf("Will reconnect in %d sec...\n", conf.reconnect_time);
+			sleep(conf.reconnect_time);
+		}
 	} while (res == -2);
 
-	close(tcp_fd);
-	printf("Remote connection closed\n");
+	printf("Exitting.\n");
 
 	return EXIT_SUCCESS;
 }
