@@ -63,7 +63,7 @@ sbaud_rate br[] = {
 	BR("3000000", B3000000),
 	BR("3500000", B3500000),
 	BR("4000000", B4000000),
-	BR(      "", 0),
+	BR(       "", 0),
 };
 
 /* map string to actual baudrate value */
@@ -381,7 +381,7 @@ void print_usage(char *name) {
 		"    -P  Serial port to connect to telescope [default: %s]\n"
 		"    -B  baudrate (1200, 2400, 4800, 460800 etc) [default: %s]\n"
 		"    -F  serial data format, databits/parity/stopbits (8N1, 7E2 etc) [default: %s]\n"
-		"    -t  session timeout in seconds [default: %d]\n"
+		"    -t  session timeout in seconds (0 for no timeout) [default: %d]\n"
 		"    -v  print version\n"
 		"    -h  print this help message\n\n",
 		name, PORT, TTY_PORT, BAUDRATE, DATA_FORMAT, SESS_TIMEOUT);
@@ -462,11 +462,26 @@ int main(int argc, char **argv) {
 		}
 	}
 
-	if(((addr = inet_addr(conf.address)) == -1) && (conf.address[0]!='\0')) {
+	if (((addr = inet_addr(conf.address)) == -1) && (conf.address[0]!='\0')) {
 		printf("Bad address: %s\n", conf.address);
 		exit(1);
 	} else if(conf.address[0]=='\0') {
 		addr = INADDR_ANY;
+	}
+
+	if (conf.max_conn < 1) {
+		printf("Number of connections should be a positive number.\n");
+		exit(1);
+	}
+
+	if (conf.timeout < 0) {
+		printf("Timeout should be a positive number, use 0 for no timeout.\n");
+		exit(1);
+	}
+
+	if ((conf.server_port < 0) || (conf.server_port > 65535)) {
+		printf("Server port is out of range.\n");
+		exit(1);
 	}
 
 	if (configure_tty_options(&conf.options, conf.baudrate, conf.dataformat) == -1) {
