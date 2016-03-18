@@ -2,8 +2,8 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ(2.57)
-AC_INIT(nexbridge,0.4-b2, rumen@skyarchive.org)
-AM_INIT_AUTOMAKE(nexbridge,0.4-b2)
+AC_INIT(nexbridge,0.4-b3, rumen@skyarchive.org)
+AM_INIT_AUTOMAKE(nexbridge,0.4-b3)
 AC_CONFIG_SRCDIR([src/nexbridge.c])
 AC_CONFIG_HEADER([src/config.h])
 
