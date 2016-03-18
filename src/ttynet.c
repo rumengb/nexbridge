@@ -228,7 +228,7 @@ int main(int argc, char **argv) {
 		}
 	}
 
-	if ((conf.address == '\0') || (conf.tcp_port == 0)) {
+	if ((conf.address[0] == '\0') || (conf.tcp_port == 0)) {
 		printf("Please specify address and port, for help: %s -h\n", argv[0]);
 		exit(1);
 	}
