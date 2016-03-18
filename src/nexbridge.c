@@ -218,7 +218,7 @@ int open_tty(const char *tty_name, const struct termios *options, struct termios
 
 	tty_fd = open(tty_name, O_RDWR | O_NOCTTY | O_SYNC);
 	if (tty_fd == -1) {
-		perror("unable to open comport ");
+		LOG("open(tty_name): %s",strerror(errno));
 		return -1;
 	}
 
@@ -234,14 +234,14 @@ int open_tty(const char *tty_name, const struct termios *options, struct termios
 	if (old_options) {
 		if (tcgetattr(tty_fd, old_options) == -1) {
 			close(tty_fd);
-			perror("unable to read portsettings ");
+			LOG("tcgetattr(tty_fd): %s",strerror(errno));
 			return -1;
 		}
 	}
 
 	if (tcsetattr(tty_fd, TCSANOW, options) == -1) {
 		close(tty_fd);
-		perror("unable to adjust portsettings ");
+		LOG("tcsetattr(tty_fd): %s",strerror(errno));
 		return -1;
 	}
 
