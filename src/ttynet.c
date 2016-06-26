@@ -197,6 +197,10 @@ int main(int argc, char **argv) {
 	int tty_fd;
 	struct sigaction sa;
 
+	/* dusable buffering for stdout and stderr */
+	setbuf(stdout, NULL);
+	setbuf(stderr, NULL);
+
 	config_defaults();
 	while((c=getopt(argc,argv,"hvra:p:T:t:"))!=-1){
 		switch(c){
